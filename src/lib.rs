@@ -257,19 +257,18 @@ impl Server {
         let ssl: Option<SslContext> = match config.ssl {
             #[cfg(feature = "ssl")]
             Some(mut config) => {
-                use std::io::Cursor;
                 use openssl::ssl;
                 use openssl::x509::X509;
-                use openssl::crypto::pkey::PKey;
+                use openssl::pkey::PKey;
                 use openssl::ssl::SSL_VERIFY_NONE;
 
-                let mut ctxt = try!(SslContext::new(ssl::SslMethod::Sslv23));
+                let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
                 try!(ctxt.set_cipher_list("DEFAULT"));
-                let certificate = try!(X509::from_pem(&mut Cursor::new(&config.certificate[..])));
+                let certificate = try!(X509::from_pem(&config.certificate[..]));
                 try!(ctxt.set_certificate(&certificate));
-                let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key[..])));
+                let private_key = try!(PKey::private_key_from_pem(&config.private_key[..]));
                 try!(ctxt.set_private_key(&private_key));
-                ctxt.set_verify(SSL_VERIFY_NONE, None);
+                ctxt.set_verify(SSL_VERIFY_NONE);
                 try!(ctxt.check_private_key());
 
                 // let's wipe the certificate and private key from memory, because we're
@@ -277,7 +276,7 @@ impl Server {
                 for b in &mut config.certificate { *b = 0; }
                 for b in &mut config.private_key { *b = 0; }
 
-                Some(ctxt)
+                Some(ctxt.build())
             },
             #[cfg(not(feature = "ssl"))]
             Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
@@ -308,12 +307,16 @@ impl Server {
                             Some(ref ssl) => {
                                 // trying to apply SSL over the connection
                                 // if an error occurs, we just close the socket and resume listening
-                                let sock = match openssl::ssl::SslStream::accept(ssl, sock) {
-                                    Ok(s) => s,
-                                    Err(_) => continue
-                                };
+                                if let Ok(ssl_stream) = openssl::ssl::Ssl::new(ssl) {
+                                    let sock = match ssl_stream.accept(sock) {
+                                        Ok(s) => s,
+                                        Err(_) => continue
+                                    };
 
-                                RefinedTcpStream::new(sock)
+                                    RefinedTcpStream::new(sock)
+                                } else {
+                                    unreachable!();
+                                }
                             },
                             #[cfg(not(feature = "ssl"))]
                             Some(_) => unreachable!(),

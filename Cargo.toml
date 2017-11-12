@@ -10,14 +10,14 @@ license = "Apache-2.0"
 repository = "https://github.com/tiny-http/tiny-http"
 
 [features]
-default = []
+default = ["ssl"]
 ssl = ["openssl"]
 
 [dependencies]
 ascii = "0.7"
 chunked_transfer = "0.3"
 encoding = "0.2"
-openssl = { version = "0.7", optional = true }
+openssl = { version = "0.9", optional = true }
 url = "0.2"
 chrono = "0.2.15"
 log = "0.3"
